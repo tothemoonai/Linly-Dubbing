@@ -96,7 +96,7 @@ class FullAutoTab(QWidget):
 
         # 翻译方式
         self.translation_method = QComboBox()
-        self.translation_method.addItems(['OpenAI', 'LLM', 'Google Translate', 'Bing Translate', 'Ernie'])
+        self.translation_method.addItems(['OpenAI', 'LLM', 'Google Translate', 'Bing Translate', 'Ernie','火山引擎-deepseek',"deepseek-api"])
         self.translation_method.setCurrentText('LLM')
         self.scroll_layout.addWidget(QLabel("翻译方式"))
         self.scroll_layout.addWidget(self.translation_method)
