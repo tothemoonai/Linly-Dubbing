@@ -347,13 +347,24 @@ class FullAutoTab(QWidget):
         try:
             self.signals.log.emit("开始处理...")
 
-            # 这里是实际处理逻辑
-            # 对于演示，我们将记录每一步的参数
+            # 记录重要参数
             self.signals.log.emit(f"视频文件夹: {self.video_folder.text()}")
             self.signals.log.emit(f"视频URL: {self.video_url.text()}")
+            self.signals.log.emit(f"分辨率: {self.resolution.value()}")
+
+            # 更详细的参数记录
+            self.signals.log.emit("-" * 50)
+            self.signals.log.emit("处理参数:")
             self.signals.log.emit(f"下载视频数量: {self.video_count.value()}")
             self.signals.log.emit(f"分辨率: {self.resolution.value()}")
-            self.signals.log.emit(f"模型: {self.model.value()}")
+            self.signals.log.emit(f"人声分离模型: {self.model.value()}")
+            self.signals.log.emit(f"计算设备: {self.device.value()}")
+            self.signals.log.emit(f"移位次数: {self.shifts.value()}")
+            self.signals.log.emit(f"ASR模型: {self.asr_model.currentText()}")
+            self.signals.log.emit(f"WhisperX模型大小: {self.whisperx_size.value()}")
+            self.signals.log.emit(f"翻译方法: {self.translation_method.currentText()}")
+            self.signals.log.emit(f"TTS方法: {self.tts_method.currentText()}")
+            self.signals.log.emit("-" * 50)
 
             # 实际的处理调用
             result, video_path = do_everything(
@@ -394,10 +405,12 @@ class FullAutoTab(QWidget):
             self.signals.finished.emit(result, video_path if video_path else "")
 
         except Exception as e:
-            # 处理出错，发送错误信号
-            error_msg = f"处理失败: {str(e)}"
+            # 捕获并记录完整的堆栈跟踪信息
+            import traceback
+            stack_trace = traceback.format_exc()
+            error_msg = f"处理失败: {str(e)}\n\n堆栈跟踪:\n{stack_trace}"
             self.signals.log.emit(error_msg)
-            self.signals.finished.emit(error_msg, "")
+            self.signals.finished.emit(f"处理失败: {str(e)}", "")
 
     def run_process(self):
         """开始处理"""
