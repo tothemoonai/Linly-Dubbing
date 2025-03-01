@@ -11,6 +11,7 @@ from .step032_translation_llm import llm_response
 from .step033_translation_translator import translator_response
 from .step034_translation_ernie import ernie_response
 load_dotenv()
+import traceback
 
 def get_necessary_info(info: dict):
     return {
@@ -182,6 +183,7 @@ def summarize(info, transcript, target_language='简体中文', method = 'LLM'):
             success = True
             break
         except Exception as e:
+            traceback.print_exc()
             retry_message += '\nSummarize the video in JSON format:\n```json\n{"title": "", "summary": ""}\n```'
             logger.warning(f'总结失败\n{e}')
             time.sleep(1)
