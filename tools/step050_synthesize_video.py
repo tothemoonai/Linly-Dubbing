@@ -6,6 +6,7 @@ import string
 import subprocess
 import time
 import random
+import traceback
 
 from loguru import logger
 
@@ -190,15 +191,19 @@ def synthesize_video(folder, subtitles=True, speed_up=1.00, fps=30, resolution='
         os.remove(final_video)
         os.rename(final_video_with_bgm, final_video)
         time.sleep(1)
-
-    if subtitles:
-        final_video_with_subtitles = final_video.replace('.mp4', '_subtitles.mp4')
-        add_subtitles(final_video, srt_path, final_video_with_subtitles, subtitle_filter, 'ffmpeg')
-        # os.remove(final_video)
-        if os.path.exists(final_video):
-            os.remove(final_video)
-        os.rename(final_video_with_subtitles, final_video)
-        time.sleep(1)
+    # 字幕无所谓，所以直接try catch就好
+    try:
+        if subtitles:
+            final_video_with_subtitles = final_video.replace('.mp4', '_subtitles.mp4')
+            add_subtitles(final_video, srt_path, final_video_with_subtitles, subtitle_filter, 'ffmpeg')
+            # os.remove(final_video)
+            if os.path.exists(final_video):
+                os.remove(final_video)
+            os.rename(final_video_with_subtitles, final_video)
+            time.sleep(1)
+    except Exception as e:
+        logger.info(f"An error occurred: {e}")
+        traceback.format_exc()
 
     return final_video
 
