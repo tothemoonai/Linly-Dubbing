@@ -11,6 +11,8 @@ from tools.step032_translation_llm import llm_response
 from tools.step033_translation_translator import translator_response
 from tools.step034_translation_ernie import ernie_response
 from tools.step035_translation_qwen import qwen_response
+from tools.step036_translation_ollama import ollama_response
+
 load_dotenv()
 import traceback
 
@@ -182,6 +184,8 @@ def summarize(info, transcript, target_language='简体中文', method = 'LLM'):
                 response = ernie_response(user_messages, system=system_content)
             elif method == '阿里云-通义千问':
                 response = qwen_response(messages)
+            elif method == 'Ollama':  # 添加对Ollama的支持
+                response = ollama_response(messages)
             else:
                 raise Exception('Invalid method')
             summary = response.replace('\n', '')
@@ -285,6 +289,8 @@ def _translate(summary, transcript, target_language='简体中文', method='LLM'
                         response = ernie_response(user_messages, system=system_content)
                     elif method == '阿里云-通义千问':
                         response = qwen_response(messages)
+                    elif method == 'Ollama':  # 添加对Ollama的支持
+                        response = ollama_response(messages)
                     else:
                         raise Exception('Invalid method')
                     translation = response.replace('\n', '')

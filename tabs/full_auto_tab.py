@@ -1,13 +1,13 @@
 import os
 import threading
 import datetime
+import json
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QScrollArea, QPushButton, QMessageBox, QComboBox, QCheckBox,
-                               QSplitter, QProgressBar, QTextEdit)
+                               QScrollArea, QPushButton, QMessageBox, QSplitter,
+                               QProgressBar, QTextEdit, QFileDialog)
 from PySide6.QtCore import QTimer, Signal, QObject, Qt
 
-from ui_components import (CustomSlider, FloatSlider, RadioButtonGroup,
-                           AudioSelector, VideoPlayer)
+from ui_components import VideoPlayer
 
 # 尝试导入实际的功能模块
 try:
@@ -30,169 +30,43 @@ class FullAutoTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # 创建主水平布局，左侧放配置项，右侧放处理按钮和视频播放器
+        # 用于存储当前配置
+        self.config = self.load_config()
+
+        # 创建主水平布局，左侧放URL输入区域，右侧放处理按钮和视频播放器
         self.main_layout = QHBoxLayout(self)
 
-        # 左侧配置区域
+        # 左侧配置区域 - 只保留URL输入
         self.left_widget = QWidget()
         self.left_layout = QVBoxLayout(self.left_widget)
 
-        # 创建一个滚动区域用于容纳配置项
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_widget = QWidget()
-        self.scroll_layout = QVBoxLayout(self.scroll_widget)
-
-        # 添加所有配置控件到左侧滚动区域
-
-        # 视频输出文件夹
-        self.video_folder = QLineEdit("videos")
-        self.scroll_layout.addWidget(QLabel("视频输出文件夹"))
-        self.scroll_layout.addWidget(self.video_folder)
-
-        # 视频URL
+        # 添加视频URL输入框
+        self.video_url_label = QLabel("视频URL")
         self.video_url = QLineEdit()
         self.video_url.setPlaceholderText("请输入Youtube或Bilibili的视频、播放列表或频道的URL")
         self.video_url.setText("https://www.bilibili.com/video/BV1kr421M7vz/")
-        self.scroll_layout.addWidget(QLabel("视频URL"))
-        self.scroll_layout.addWidget(self.video_url)
 
-        # 下载视频数量
-        self.video_count = CustomSlider(1, 100, 1, "下载视频数量", 5)
-        self.scroll_layout.addWidget(self.video_count)
+        # 选择本地视频按钮
+        self.select_video_button = QPushButton("选择本地视频")
+        self.select_video_button.clicked.connect(self.select_local_video)
 
-        # 分辨率
-        self.resolution = RadioButtonGroup(
-            ['4320p', '2160p', '1440p', '1080p', '720p', '480p', '360p', '240p', '144p'],
-            "分辨率",
-            '1080p'
-        )
-        self.scroll_layout.addWidget(self.resolution)
+        self.left_layout.addWidget(self.video_url_label)
+        self.left_layout.addWidget(self.video_url)
 
-        # 模型
-        self.model = RadioButtonGroup(
-            ['htdemucs', 'htdemucs_ft', 'htdemucs_6s', 'hdemucs_mmi', 'mdx', 'mdx_extra', 'mdx_q', 'mdx_extra_q',
-             'SIG'],
-            "模型",
-            'htdemucs_ft'
-        )
-        self.scroll_layout.addWidget(self.model)
+        # 本地视频选择布局
+        local_video_layout = QHBoxLayout()
+        local_video_layout.addWidget(self.select_video_button)
+        self.left_layout.addLayout(local_video_layout)
 
-        # 计算设备
-        self.device = RadioButtonGroup(['auto', 'cuda', 'cpu'], "计算设备", 'auto')
-        self.scroll_layout.addWidget(self.device)
+        # 增加一个配置信息摘要
+        self.config_summary = QTextEdit()
+        self.config_summary.setReadOnly(True)
+        self.config_summary.setMaximumHeight(200)
+        self.update_config_summary()
 
-        # 移位次数
-        self.shifts = CustomSlider(0, 10, 1, "移位次数 Number of shifts", 5)
-        self.scroll_layout.addWidget(self.shifts)
-
-        # ASR模型选择
-        self.asr_model = QComboBox()
-        self.asr_model.addItems(['WhisperX', 'FunASR'])
-        self.scroll_layout.addWidget(QLabel("ASR模型选择"))
-        self.scroll_layout.addWidget(self.asr_model)
-
-        # WhisperX模型大小
-        self.whisperx_size = RadioButtonGroup(['large', 'medium', 'small', 'base', 'tiny'], "WhisperX模型大小", 'large')
-        self.scroll_layout.addWidget(self.whisperx_size)
-
-        # 批处理大小
-        self.batch_size = CustomSlider(1, 128, 1, "批处理大小 Batch Size", 32)
-        self.scroll_layout.addWidget(self.batch_size)
-
-        # 分离多个说话人
-        self.separate_speakers = QCheckBox("分离多个说话人")
-        self.separate_speakers.setChecked(True)
-        self.scroll_layout.addWidget(self.separate_speakers)
-
-        # 最小说话人数
-        self.min_speakers = RadioButtonGroup([None, 1, 2, 3, 4, 5, 6, 7, 8, 9], "最小说话人数", None)
-        self.scroll_layout.addWidget(self.min_speakers)
-
-        # 最大说话人数
-        self.max_speakers = RadioButtonGroup([None, 1, 2, 3, 4, 5, 6, 7, 8, 9], "最大说话人数", None)
-        self.scroll_layout.addWidget(self.max_speakers)
-
-        # 翻译方式
-        self.translation_method = QComboBox()
-        self.translation_method.addItems(
-            ['OpenAI', 'LLM', 'Google Translate', 'Bing Translate', 'Ernie', '火山引擎-deepseek', "deepseek-api",
-             "阿里云-通义千问"])
-        self.translation_method.setCurrentText('LLM')
-        self.scroll_layout.addWidget(QLabel("翻译方式"))
-        self.scroll_layout.addWidget(self.translation_method)
-
-        # 目标语言 (翻译)
-        self.target_language_translation = QComboBox()
-        self.target_language_translation.addItems(
-            ['简体中文', '繁体中文', 'English', 'Cantonese', 'Japanese', 'Korean'])
-        self.scroll_layout.addWidget(QLabel("目标语言 (翻译)"))
-        self.scroll_layout.addWidget(self.target_language_translation)
-
-        # AI语音生成方法
-        self.tts_method = QComboBox()
-        self.tts_method.addItems(['xtts', 'cosyvoice', 'EdgeTTS'])
-        self.scroll_layout.addWidget(QLabel("AI语音生成方法"))
-        self.scroll_layout.addWidget(self.tts_method)
-
-        # 目标语言 (TTS)
-        self.target_language_tts = QComboBox()
-        self.target_language_tts.addItems(['中文', 'English', '粤语', 'Japanese', 'Korean', 'Spanish', 'French'])
-        self.target_language_tts.setCurrentText('中文')
-        self.scroll_layout.addWidget(QLabel("目标语言 (TTS)"))
-        self.scroll_layout.addWidget(self.target_language_tts)
-
-        # EdgeTTS声音选择
-        self.edge_tts_voice = QComboBox()
-        self.edge_tts_voice.addItems(SUPPORT_VOICE)
-        self.edge_tts_voice.setCurrentText('zh-CN-XiaoxiaoNeural')
-        self.scroll_layout.addWidget(QLabel("EdgeTTS声音选择"))
-        self.scroll_layout.addWidget(self.edge_tts_voice)
-
-        # 添加字幕
-        self.add_subtitles = QCheckBox("添加字幕")
-        self.add_subtitles.setChecked(True)
-        self.scroll_layout.addWidget(self.add_subtitles)
-
-        # 加速倍数
-        self.speed_factor = FloatSlider(0.5, 2, 0.05, "加速倍数", 1.00)
-        self.scroll_layout.addWidget(self.speed_factor)
-
-        # 帧率
-        self.frame_rate = CustomSlider(1, 60, 1, "帧率", 30)
-        self.scroll_layout.addWidget(self.frame_rate)
-
-        # 背景音乐
-        self.background_music = AudioSelector("背景音乐")
-        self.scroll_layout.addWidget(self.background_music)
-
-        # 背景音乐音量
-        self.bg_music_volume = FloatSlider(0, 1, 0.05, "背景音乐音量", 0.5)
-        self.scroll_layout.addWidget(self.bg_music_volume)
-
-        # 视频音量
-        self.video_volume = FloatSlider(0, 1, 0.05, "视频音量", 1.0)
-        self.scroll_layout.addWidget(self.video_volume)
-
-        # 分辨率 (输出)
-        self.output_resolution = RadioButtonGroup(
-            ['4320p', '2160p', '1440p', '1080p', '720p', '480p', '360p', '240p', '144p'],
-            "输出分辨率",
-            '1080p'
-        )
-        self.scroll_layout.addWidget(self.output_resolution)
-
-        # Max Workers
-        self.max_workers = CustomSlider(1, 100, 1, "Max Workers", 1)
-        self.scroll_layout.addWidget(self.max_workers)
-
-        # Max Retries
-        self.max_retries = CustomSlider(1, 10, 1, "Max Retries", 3)
-        self.scroll_layout.addWidget(self.max_retries)
-
-        # 设置滚动区域
-        self.scroll_area.setWidget(self.scroll_widget)
-        self.left_layout.addWidget(self.scroll_area)
+        self.config_summary_label = QLabel("当前配置摘要：")
+        self.left_layout.addWidget(self.config_summary_label)
+        self.left_layout.addWidget(self.config_summary)
 
         # 右侧控制和显示区域
         self.right_widget = QWidget()
@@ -205,6 +79,7 @@ class FullAutoTab(QWidget):
         self.run_button = QPushButton("一键处理")
         self.run_button.clicked.connect(self.run_process)
         self.run_button.setMinimumHeight(50)
+        self.run_button.setStyleSheet("background-color: #4CAF50; color: white;")
 
         # 停止按钮
         self.stop_button = QPushButton("停止处理")
@@ -290,8 +165,8 @@ class FullAutoTab(QWidget):
         self.main_splitter.addWidget(self.left_widget)
         self.main_splitter.addWidget(self.right_widget)
 
-        # 设置初始分割比例 (40% 左侧, 60% 右侧)
-        self.main_splitter.setSizes([400, 600])
+        # 设置初始分割比例 (30% 左侧, 70% 右侧)
+        self.main_splitter.setSizes([300, 700])
 
         self.main_layout.addWidget(self.main_splitter)
         self.setLayout(self.main_layout)
@@ -320,6 +195,63 @@ class FullAutoTab(QWidget):
         # 初始化日志
         self.append_log("系统初始化完成，准备就绪")
 
+    def update_config_summary(self):
+        """更新配置摘要显示"""
+        config = self.load_config()
+        if config:
+            summary_text = "● 视频输出目录: {}\n".format(config.get("video_folder", "videos"))
+            summary_text += "● 分辨率: {}\n".format(config.get("resolution", "1080p"))
+            summary_text += "● 人声分离: {}, 设备: {}\n".format(
+                config.get("model", "htdemucs_ft"),
+                config.get("device", "auto")
+            )
+            summary_text += "● 语音识别: {}, 模型: {}\n".format(
+                config.get("asr_model", "WhisperX"),
+                config.get("whisperx_size", "large")
+            )
+            summary_text += "● 翻译方式: {}\n".format(config.get("translation_method", "LLM"))
+            summary_text += "● TTS方式: {}, 语言: {}\n".format(
+                config.get("tts_method", "EdgeTTS"),
+                config.get("target_language_tts", "中文")
+            )
+            summary_text += "● 添加字幕: {}, 加速倍数: {}\n".format(
+                "是" if config.get("add_subtitles", True) else "否",
+                config.get("speed_factor", 1.00)
+            )
+            self.config_summary.setText(summary_text)
+        else:
+            self.config_summary.setText("未找到配置信息，将使用默认配置")
+
+    def select_local_video(self):
+        """选择本地视频文件"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择视频文件", "", "视频文件 (*.mp4 *.avi *.mkv *.mov *.flv)"
+        )
+        if file_path:
+            self.video_url.setText(file_path)
+            self.append_log(f"已选择本地视频文件: {file_path}")
+
+    def load_config(self):
+        """从配置文件加载配置"""
+        try:
+            config_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(config_dir, "config.json")
+
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                return config
+            else:
+                return None
+        except Exception as e:
+            self.append_log(f"加载配置失败: {str(e)}")
+            return None
+
+    def update_config(self, new_config):
+        """更新当前配置"""
+        self.config = new_config
+        self.update_config_summary()
+
     def simulate_progress(self):
         """模拟进度更新，实际应用中应由实际处理进度替代"""
         if self.current_progress < 100:
@@ -344,57 +276,59 @@ class FullAutoTab(QWidget):
 
     def process_thread(self):
         """异步处理线程"""
+        config = self.load_config() or {}
         try:
             self.signals.log.emit("开始处理...")
+            url = self.video_url.text()
 
             # 记录重要参数
-            self.signals.log.emit(f"视频文件夹: {self.video_folder.text()}")
-            self.signals.log.emit(f"视频URL: {self.video_url.text()}")
-            self.signals.log.emit(f"分辨率: {self.resolution.value()}")
+            self.signals.log.emit(f"视频文件夹: {config.get('video_folder', 'videos')}")
+            self.signals.log.emit(f"视频URL: {url}")
+            self.signals.log.emit(f"分辨率: {config.get('resolution', '1080p')}")
 
             # 更详细的参数记录
             self.signals.log.emit("-" * 50)
             self.signals.log.emit("处理参数:")
-            self.signals.log.emit(f"下载视频数量: {self.video_count.value()}")
-            self.signals.log.emit(f"分辨率: {self.resolution.value()}")
-            self.signals.log.emit(f"人声分离模型: {self.model.value()}")
-            self.signals.log.emit(f"计算设备: {self.device.value()}")
-            self.signals.log.emit(f"移位次数: {self.shifts.value()}")
-            self.signals.log.emit(f"ASR模型: {self.asr_model.currentText()}")
-            self.signals.log.emit(f"WhisperX模型大小: {self.whisperx_size.value()}")
-            self.signals.log.emit(f"翻译方法: {self.translation_method.currentText()}")
-            self.signals.log.emit(f"TTS方法: {self.tts_method.currentText()}")
+            self.signals.log.emit(f"下载视频数量: {config.get('video_count', 5)}")
+            self.signals.log.emit(f"分辨率: {config.get('resolution', '1080p')}")
+            self.signals.log.emit(f"人声分离模型: {config.get('model', 'htdemucs_ft')}")
+            self.signals.log.emit(f"计算设备: {config.get('device', 'auto')}")
+            self.signals.log.emit(f"移位次数: {config.get('shifts', 5)}")
+            self.signals.log.emit(f"ASR模型: {config.get('asr_method', 'WhisperX')}")
+            self.signals.log.emit(f"WhisperX模型大小: {config.get('whisperx_size', 'large')}")
+            self.signals.log.emit(f"翻译方法: {config.get('translation_method', 'LLM')}")
+            self.signals.log.emit(f"TTS方法: {config.get('tts_method', 'EdgeTTS')}")
             self.signals.log.emit("-" * 50)
 
             # 实际的处理调用
             result, video_path = do_everything(
-                self.video_folder.text(),
-                self.video_url.text(),
-                self.video_count.value(),
-                self.resolution.value(),
-                self.model.value(),
-                self.device.value(),
-                self.shifts.value(),
-                self.asr_model.currentText(),
-                self.whisperx_size.value(),
-                self.batch_size.value(),
-                self.separate_speakers.isChecked(),
-                self.min_speakers.value(),
-                self.max_speakers.value(),
-                self.translation_method.currentText(),
-                self.target_language_translation.currentText(),
-                self.tts_method.currentText(),
-                self.target_language_tts.currentText(),
-                self.edge_tts_voice.currentText(),
-                self.add_subtitles.isChecked(),
-                self.speed_factor.value(),
-                self.frame_rate.value(),
-                self.background_music.value(),
-                self.bg_music_volume.value(),
-                self.video_volume.value(),
-                self.output_resolution.value(),
-                self.max_workers.value(),
-                self.max_retries.value()
+                config.get('video_folder', 'videos'),  # 使用配置中的参数或默认值
+                url,
+                config.get('video_count', 5),
+                config.get('resolution', '1080p'),
+                config.get('model', 'htdemucs_ft'),
+                config.get('device', 'auto'),
+                config.get('shifts', 5),
+                config.get('asr_model', 'WhisperX'),
+                config.get('whisperx_size', 'large'),
+                config.get('batch_size', 32),
+                config.get('separate_speakers', True),
+                config.get('min_speakers', None),
+                config.get('max_speakers', None),
+                config.get('translation_method', 'LLM'),
+                config.get('target_language_translation', '简体中文'),
+                config.get('tts_method', 'EdgeTTS'),
+                config.get('target_language_tts', '中文'),
+                config.get('edge_tts_voice', 'zh-CN-XiaoxiaoNeural'),
+                config.get('add_subtitles', True),
+                config.get('speed_factor', 1.00),
+                config.get('frame_rate', 30),
+                config.get('background_music', None),
+                config.get('bg_music_volume', 0.5),
+                config.get('video_volume', 1.0),
+                config.get('output_resolution', '1080p'),
+                config.get('max_workers', 1),
+                config.get('max_retries', 3)
             )
 
             self.signals.log.emit(f"处理完成: {result}")
