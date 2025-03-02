@@ -6,10 +6,11 @@ import re
 from dotenv import load_dotenv
 import time
 from loguru import logger
-from .step031_translation_openai import openai_response
-from .step032_translation_llm import llm_response
-from .step033_translation_translator import translator_response
-from .step034_translation_ernie import ernie_response
+from tools.step031_translation_openai import openai_response
+from tools.step032_translation_llm import llm_response
+from tools.step033_translation_translator import translator_response
+from tools.step034_translation_ernie import ernie_response
+from tools.step035_translation_qwen import qwen_response
 load_dotenv()
 import traceback
 
@@ -89,6 +90,8 @@ def valid_translation(text, translation):
             return False, f"Don't include `{word}` in the translation. Only translate the following sentence and give me the result."
     
     return True, translation_postprocess(translation)
+
+
 def split_sentences(translation, use_char_based_end=True):
     output_data = []
     for item in translation:
@@ -96,10 +99,24 @@ def split_sentences(translation, use_char_based_end=True):
         text = item['text']
         speaker = item['speaker']
         translation_text = item['translation']
+
+        # 检查翻译文本是否为空
+        if not translation_text or len(translation_text.strip()) == 0:
+            # 如果翻译为空，直接使用原始时间范围并跳过分割
+            output_data.append({
+                "start": round(start, 3),
+                "end": round(item['end'], 3),
+                "text": text,
+                "speaker": speaker,
+                "translation": translation_text or "未翻译"  # 如果是空字符串，提供默认值
+            })
+            continue
+
         sentences = split_text_into_sentences(translation_text)
 
         if use_char_based_end:
-            duration_per_char = (item['end'] - item['start']) / len(translation_text)
+            # 避免除以零错误
+            duration_per_char = (item['end'] - item['start']) / max(1, len(translation_text))
         else:
             duration_per_char = 0
 
@@ -163,6 +180,8 @@ def summarize(info, transcript, target_language='简体中文', method = 'LLM'):
                 system_content = messages[0]['content']
                 user_messages = messages[1:]
                 response = ernie_response(user_messages, system=system_content)
+            elif method == '阿里云-通义千问':
+                response = qwen_response(messages)
             else:
                 raise Exception('Invalid method')
             summary = response.replace('\n', '')
@@ -264,6 +283,8 @@ def _translate(summary, transcript, target_language='简体中文', method='LLM'
                         system_content = messages[0]['content']
                         user_messages = messages[1:]
                         response = ernie_response(user_messages, system=system_content)
+                    elif method == '阿里云-通义千问':
+                        response = qwen_response(messages)
                     else:
                         raise Exception('Invalid method')
                     translation = response.replace('\n', '')

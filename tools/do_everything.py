@@ -4,7 +4,7 @@ import time
 import traceback
 from loguru import logger
 from .step000_video_downloader import get_info_list_from_url, download_single_video, get_target_folder
-from .step010_demucs_vr import separate_all_audio_under_folder, init_demucs
+from .step010_demucs_vr import separate_all_audio_under_folder, init_demucs, release_model
 from .step020_asr import transcribe_all_audio_under_folder
 from .step021_asr_whisperx import init_whisperx, init_diarize
 from .step022_asr_funasr import init_funasr
@@ -14,6 +14,68 @@ from .step042_tts_xtts import init_TTS
 from .step043_tts_cosyvoice import init_cosyvoice
 from .step050_synthesize_video import synthesize_all_video_under_folder
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# 跟踪模型初始化状态
+models_initialized = {
+    'demucs': False,
+    'xtts': False,
+    'cosyvoice': False,
+    'whisperx': False,
+    'diarize': False,
+    'funasr': False
+}
+
+
+def initialize_models(tts_method, asr_method, diarization):
+    """
+    初始化所需的模型。
+    只在第一次调用时初始化模型，避免重复加载。
+    """
+    # 使用全局状态跟踪已初始化的模型
+    global models_initialized
+
+    with ThreadPoolExecutor() as executor:
+        try:
+            # Demucs模型初始化
+            if not models_initialized['demucs']:
+                executor.submit(init_demucs)
+                models_initialized['demucs'] = True
+                logger.info("Demucs模型初始化完成")
+            else:
+                logger.info("Demucs模型已初始化，跳过")
+
+            # TTS模型初始化
+            if tts_method == 'xtts' and not models_initialized['xtts']:
+                executor.submit(init_TTS)
+                models_initialized['xtts'] = True
+                logger.info("XTTS模型初始化完成")
+            elif tts_method == 'cosyvoice' and not models_initialized['cosyvoice']:
+                executor.submit(init_cosyvoice)
+                models_initialized['cosyvoice'] = True
+                logger.info("CosyVoice模型初始化完成")
+
+            # ASR模型初始化
+            if asr_method == 'WhisperX':
+                if not models_initialized['whisperx']:
+                    executor.submit(init_whisperx)
+                    models_initialized['whisperx'] = True
+                    logger.info("WhisperX模型初始化完成")
+                if diarization and not models_initialized['diarize']:
+                    executor.submit(init_diarize)
+                    models_initialized['diarize'] = True
+                    logger.info("Diarize模型初始化完成")
+            elif asr_method == 'FunASR' and not models_initialized['funasr']:
+                executor.submit(init_funasr)
+                models_initialized['funasr'] = True
+                logger.info("FunASR模型初始化完成")
+
+        except Exception as e:
+            stack_trace = traceback.format_exc()
+            logger.error(f"初始化模型失败: {str(e)}\n{stack_trace}")
+            # 出现错误时，重置初始化状态
+            models_initialized = {key: False for key in models_initialized}
+            release_model()  # 释放已加载的模型
+            raise
 
 
 def process_video(info, root_folder, resolution,
@@ -140,24 +202,13 @@ def do_everything(root_folder, url, num_videos=5, resolution='1080p',
         url = url.replace(' ', '').replace('，', '\n').replace(',', '\n')
         urls = [_ for _ in url.split('\n') if _]
 
-        # 使用线程池执行任务
-        with ThreadPoolExecutor() as executor:
-            try:
-                executor.submit(init_demucs)
-                if tts_method == 'xtts':
-                    executor.submit(init_TTS)
-                elif tts_method == 'cosyvoice':
-                    executor.submit(init_cosyvoice)
-                if asr_method == 'WhisperX':
-                    executor.submit(init_whisperx)
-                    if diarization:
-                        executor.submit(init_diarize)
-                elif asr_method == 'FunASR':
-                    executor.submit(init_funasr)
-            except Exception as e:
-                stack_trace = traceback.format_exc()
-                logger.error(f"初始化模型失败: {str(e)}\n{stack_trace}")
-                return f"初始化模型失败: {str(e)}", None
+        # 初始化模型（改用新的初始化函数）
+        try:
+            initialize_models(tts_method, asr_method, diarization)
+        except Exception as e:
+            stack_trace = traceback.format_exc()
+            logger.error(f"初始化模型失败: {str(e)}\n{stack_trace}")
+            return f"初始化模型失败: {str(e)}", None
 
         out_video = None
         if url.endswith('.mp4'):
@@ -208,7 +259,10 @@ def do_everything(root_folder, url, num_videos=5, resolution='1080p',
                 return f"处理本地视频失败: {str(e)}", None
         else:
             try:
-                videos_info = get_info_list_from_url(urls, num_videos)
+                videos_info = []
+                for video_info in get_info_list_from_url(urls, num_videos):
+                    videos_info.append(video_info)
+
                 if not videos_info:
                     return "获取视频信息失败，请检查URL是否正确", None
 
