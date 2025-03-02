@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 import json
 import os
+import shutil
+import string
 import subprocess
 import time
+import random
 
 from loguru import logger
 
@@ -192,33 +195,49 @@ def synthesize_video(folder, subtitles=True, speed_up=1.00, fps=30, resolution='
         final_video_with_subtitles = final_video.replace('.mp4', '_subtitles.mp4')
         add_subtitles(final_video, srt_path, final_video_with_subtitles, subtitle_filter, 'ffmpeg')
         # os.remove(final_video)
+        if os.path.exists(final_video):
+            os.remove(final_video)
         os.rename(final_video_with_subtitles, final_video)
         time.sleep(1)
 
     return final_video
 
-def add_subtitles(video_path, srt_path, output_path, subtitle_filter = None, method='moviepy'):
+
+def add_subtitles(video_path, srt_path, output_path, subtitle_filter=None, method='moviepy'):
     """
     给视频文件添加字幕。
-    
+
     参数：
         video_path (str): 输入视频文件的路径。
         srt_path (str): .srt 字幕文件的路径。
         output_path (str): 输出视频文件的路径。
         method (str): 使用的方法 ('moviepy' 或 'ffmpeg')，默认为 'moviepy'。
-    
+
     返回：
         bool: 成功返回 True，失败返回 False。
     """
+    # 生成随机字符串作为临时文件名
+    random_string = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    temp_video_path = f"temp/temp_{random_string}.mp4"
+    random_string = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    temp_srt_path = f"temp/temp_{random_string}.srt"
+    if subtitle_filter is not None:
+        subtitle_filter = subtitle_filter.replace(srt_path, temp_srt_path)
+    random_string = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    temp_output_path = f"temp/temp_{random_string}.mp4"
+    # 开始复制原始文件到临时文件
+    shutil.copyfile(video_path, temp_video_path)
+    shutil.copyfile(srt_path, temp_srt_path)
     # try:
     if method == 'moviepy':
-        from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
+        from moviepy import VideoFileClip, TextClip, CompositeVideoClip
         from moviepy.video.tools.subtitles import SubtitlesClip
 
         # 使用 moviepy 添加字幕
         video = VideoFileClip(video_path)
         generator = lambda txt: TextClip(txt, font='font/SimHei.ttf', fontsize=24, color='white')
         subtitles = SubtitlesClip(srt_path, generator)
+        final_video = VideoFileClip(output_path)
 
         final_video = final_video.set_subtitles(subtitles)
         # 合成字幕和视频
@@ -232,20 +251,21 @@ def add_subtitles(video_path, srt_path, output_path, subtitle_filter = None, met
         # 使用 ffmpeg 添加字幕
         command = [
             'ffmpeg',
-            '-i', video_path,
-            '-vf', f"subtitles={srt_path}" if subtitle_filter is None else subtitle_filter,
-            output_path,
+            '-i', temp_video_path,
+            '-vf', f"subtitles={temp_srt_path}" if subtitle_filter is None else subtitle_filter,
+            temp_output_path,
             '-y',
             '-threads', '2',
         ]
-
+        logger.info("FFmpeg command: " + ' '.join(command))
         subprocess.run(command, check=True)
+        shutil.copyfile(temp_output_path, output_path)
         return True
 
     else:
         print("Unsupported method. Please use 'moviepy' or 'ffmpeg'.")
         return False
-    
+
     # except Exception as e:
     #     print(f"An error occurred: {e}")
     #     return False
