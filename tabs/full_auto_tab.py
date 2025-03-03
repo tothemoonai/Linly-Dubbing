@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineE
                                QScrollArea, QPushButton, QMessageBox, QSplitter,
                                QProgressBar, QTextEdit, QFileDialog)
 from PySide6.QtCore import QTimer, Signal, QObject, Qt
+import subprocess
 
 from ui_components import VideoPlayer
 
@@ -93,9 +94,16 @@ class FullAutoTab(QWidget):
         self.preview_button.setMinimumHeight(50)
         self.preview_button.setEnabled(False)  # 初始禁用
 
+        # 打开文件所在目录按钮
+        self.open_folder_button = QPushButton("打开所在目录")
+        self.open_folder_button.clicked.connect(self.open_folder)
+        self.open_folder_button.setMinimumHeight(50)
+        self.open_folder_button.setEnabled(False)  # 初始禁用
+
         # 添加按钮到按钮布局
         self.button_layout.addWidget(self.run_button)
         self.button_layout.addWidget(self.stop_button)
+        self.button_layout.addWidget(self.open_folder_button)
         self.button_layout.addWidget(self.preview_button)
         self.right_layout.addLayout(self.button_layout)
 
@@ -182,9 +190,7 @@ class FullAutoTab(QWidget):
         # 存储生成的视频路径
         self.generated_video_path = None
 
-        # 模拟进度更新计时器
-        self.progress_timer = QTimer()
-        self.progress_timer.timeout.connect(self.simulate_progress)
+        # 实际进度更新
         self.current_progress = 0
         self.progress_steps = [
             "下载视频...", "人声分离...", "AI智能语音识别...",
@@ -252,24 +258,10 @@ class FullAutoTab(QWidget):
         self.config = new_config
         self.update_config_summary()
 
-    def simulate_progress(self):
-        """模拟进度更新，实际应用中应由实际处理进度替代"""
-        if self.current_progress < 100:
-            # 每个步骤大约16-17%的进度
-            step_progress = self.current_progress % 17
-
-            if step_progress == 0 and self.current_progress > 0:
-                self.current_step = (self.current_step + 1) % len(self.progress_steps)
-                self.append_log(f"开始{self.progress_steps[self.current_step]}")
-
-            self.current_progress += 1
-            self.progress_bar.setValue(self.current_progress)
-            self.progress_label.setText(f"{self.progress_steps[self.current_step]} ({self.current_progress}%)")
-        else:
-            self.progress_timer.stop()
-
     def update_progress(self, progress, status):
         """更新处理进度"""
+        # 确保进度条与状态信息一致
+        self.current_progress = progress
         self.progress_bar.setValue(progress)
         self.progress_label.setText(status)
         self.append_log(f"进度更新: {progress}% - {status}")
@@ -279,6 +271,7 @@ class FullAutoTab(QWidget):
         config = self.load_config() or {}
         try:
             self.signals.log.emit("开始处理...")
+            self.signals.progress.emit(0, "初始化处理...")
             url = self.video_url.text()
 
             # 记录重要参数
@@ -299,6 +292,9 @@ class FullAutoTab(QWidget):
             self.signals.log.emit(f"翻译方法: {config.get('translation_method', 'LLM')}")
             self.signals.log.emit(f"TTS方法: {config.get('tts_method', 'EdgeTTS')}")
             self.signals.log.emit("-" * 50)
+
+            # 更新进度信息 - 设置步骤1：下载视频
+            self.signals.progress.emit(5, f"{self.progress_steps[0]} (5%)")
 
             # 实际的处理调用
             result, video_path = do_everything(
@@ -331,6 +327,8 @@ class FullAutoTab(QWidget):
                 config.get('max_retries', 3)
             )
 
+            # 完成处理，设置100%进度
+            self.signals.progress.emit(100, "处理完成!")
             self.signals.log.emit(f"处理完成: {result}")
             if video_path:
                 self.signals.log.emit(f"生成视频路径: {video_path}")
@@ -344,6 +342,7 @@ class FullAutoTab(QWidget):
             stack_trace = traceback.format_exc()
             error_msg = f"处理失败: {str(e)}\n\n堆栈跟踪:\n{stack_trace}"
             self.signals.log.emit(error_msg)
+            self.signals.progress.emit(0, "处理失败")
             self.signals.finished.emit(f"处理失败: {str(e)}", "")
 
     def run_process(self):
@@ -355,12 +354,14 @@ class FullAutoTab(QWidget):
         self.run_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         self.preview_button.setEnabled(False)
+        self.open_folder_button.setEnabled(False)
         self.status_label.setText("正在处理...")
 
         # 重置进度
         self.current_progress = 0
         self.current_step = 0
         self.progress_bar.setValue(0)
+        self.progress_label.setText("准备处理...")
 
         # 记录开始处理
         self.append_log("-" * 50)
@@ -372,16 +373,12 @@ class FullAutoTab(QWidget):
         self.worker_thread.daemon = True
         self.worker_thread.start()
 
-        # 启动模拟进度更新 (实际应用中由实际进度替代)
-        self.progress_timer.start(100)  # 每100毫秒更新一次
-
     def stop_process(self):
         """停止处理"""
         if not self.is_processing:
             return
 
         # 在实际应用中，添加停止处理的逻辑
-        self.progress_timer.stop()
         # TODO: 添加中断处理线程的代码
 
         self.is_processing = False
@@ -392,10 +389,6 @@ class FullAutoTab(QWidget):
 
     def process_finished(self, result, video_path):
         """处理完成回调"""
-        self.progress_timer.stop()
-        self.progress_bar.setValue(100)
-        self.progress_label.setText("处理完成!")
-
         self.is_processing = False
         self.run_button.setEnabled(True)  # 重新启用一键处理按钮
         self.stop_button.setEnabled(False)  # 禁用停止处理按钮
@@ -408,9 +401,10 @@ class FullAutoTab(QWidget):
         self.append_log(f"处理完成 - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.append_log(f"结果: {result}")
 
-        # 如果有视频路径，启用预览按钮并加载视频
+        # 如果有视频路径，启用预览按钮和打开文件夹按钮，并加载视频
         if video_path and os.path.exists(video_path):
             self.preview_button.setEnabled(True)
+            self.open_folder_button.setEnabled(True)
             self.video_player.set_video(video_path)
             self.append_log(f"生成视频路径: {video_path}")
         else:
@@ -428,6 +422,21 @@ class FullAutoTab(QWidget):
             # 播放视频
             self.video_player.play_pause()
             self.append_log(f"预览视频: {self.generated_video_path}")
+
+    def open_folder(self):
+        """打开文件所在目录"""
+        if self.generated_video_path and os.path.exists(self.generated_video_path):
+            folder_path = os.path.dirname(self.generated_video_path)
+            self.append_log(f"打开文件夹: {folder_path}")
+
+            # 根据操作系统打开文件夹
+            if os.name == 'nt':  # Windows
+                os.startfile(folder_path)
+            elif os.name == 'posix':  # macOS, Linux
+                if 'darwin' in os.sys.platform:  # macOS
+                    subprocess.run(['open', folder_path])
+                else:  # Linux
+                    subprocess.run(['xdg-open', folder_path])
 
     def append_log(self, message):
         """添加日志信息"""
