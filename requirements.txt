@@ -43,4 +43,5 @@ lightning==2.2.4
 requests
 dotenv
 loguru
+moviepy
 # ctranslate2==3.24.0
