@@ -2,6 +2,8 @@ import json
 import os
 import time
 import traceback
+
+import torch
 from loguru import logger
 from .step000_video_downloader import get_info_list_from_url, download_single_video, get_target_folder
 from .step010_demucs_vr import separate_all_audio_under_folder, init_demucs, release_model
@@ -25,6 +27,17 @@ models_initialized = {
     'funasr': False
 }
 
+
+def get_available_gpu_memory():
+    """获取当前可用的GPU显存大小（GB）"""
+    try:
+        if torch.cuda.is_available():
+            # 获取当前设备的可用显存
+            free_memory = torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)
+            return free_memory / (1024 ** 3)  # 转换为GB
+        return 0  # 如果没有GPU或CUDA不可用
+    except Exception:
+        return 0  # 出错时返回0
 
 def initialize_models(tts_method, asr_method, diarization):
     """

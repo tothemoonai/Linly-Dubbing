@@ -275,7 +275,7 @@ def add_subtitles(video_path, srt_path, output_path, subtitle_filter=None, metho
     #     print(f"An error occurred: {e}")
     #     return False
 
-def synthesize_all_video_under_folder(folder, subtitles=True, speed_up=1.00, fps=30, background_music=None, bgm_volume=0.5, video_volume=1.0, resolution='1080p', watermark_path='docs/linly_watermark.png'):
+def synthesize_all_video_under_folder(folder, subtitles=True, speed_up=1.00, fps=30, background_music=None, bgm_volume=0.5, video_volume=1.0, resolution='1080p', watermark_path=None):
     watermark_path = None if not os.path.exists(watermark_path) else watermark_path
     output_video = None
     for root, dirs, files in os.walk(folder):
