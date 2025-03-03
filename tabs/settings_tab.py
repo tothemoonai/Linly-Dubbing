@@ -243,65 +243,125 @@ class SettingsTab(QWidget):
 
     def apply_config(self, config):
         """将配置应用到UI控件"""
-        # 应用各项设置
         try:
+            # 基本设置
             self.video_folder.setText(config.get("video_folder", "videos"))
-            self.resolution.buttons[self.resolution.buttons.index(
-                next(b for o, b in self.resolution.buttons if o == config.get("resolution", "1080p")))][1].setChecked(
-                True)
+
+            # 为每个单选按钮组应用更健壮的选择逻辑
+            # 分辨率
+            resolution_value = config.get("resolution", "1080p")
+            self._set_radio_button(self.resolution.buttons, resolution_value, "1080p")
+
+            # 视频数量
             self.video_count.setValue(config.get("video_count", 5))
-            self.model.buttons[self.model.buttons.index(
-                next(b for o, b in self.model.buttons if o == config.get("model", "htdemucs_ft")))][1].setChecked(True)
-            self.device.buttons[self.device.buttons.index(
-                next(b for o, b in self.device.buttons if o == config.get("device", "auto")))][1].setChecked(True)
+
+            # 模型
+            model_value = config.get("model", "htdemucs_ft")
+            self._set_radio_button(self.model.buttons, model_value, "htdemucs_ft")
+
+            # 设备
+            device_value = config.get("device", "auto")
+            self._set_radio_button(self.device.buttons, device_value, "auto")
+
+            # 移位次数
             self.shifts.setValue(config.get("shifts", 5))
-            self.asr_model.buttons[self.asr_model.buttons.index(
-                next(b for o, b in self.asr_model.buttons if o == config.get("asr_model", "WhisperX")))][1].setChecked(
-                True)
-            self.whisperx_size.buttons[self.whisperx_size.buttons.index(
-                next(b for o, b in self.whisperx_size.buttons if o == config.get("whisperx_size", "large")))][
-                1].setChecked(True)
+
+            # ASR模型
+            asr_model_value = config.get("asr_model", "WhisperX")
+            self._set_radio_button(self.asr_model.buttons, asr_model_value, "WhisperX")
+
+            # WhisperX模型大小
+            whisperx_size_value = config.get("whisperx_size", "large")
+            self._set_radio_button(self.whisperx_size.buttons, whisperx_size_value, "large")
+
+            # 批处理大小
             self.batch_size.setValue(config.get("batch_size", 32))
-            self.separate_speakers.buttons[self.separate_speakers.buttons.index(
-                next(b for o, b in self.separate_speakers.buttons if o == config.get("separate_speakers", True)))][
-                1].setChecked(True)
-            self.min_speakers.buttons[self.min_speakers.buttons.index(
-                next(b for o, b in self.min_speakers.buttons if o == config.get("min_speakers", None)))][1].setChecked(
-                True)
-            self.max_speakers.buttons[self.max_speakers.buttons.index(
-                next(b for o, b in self.max_speakers.buttons if o == config.get("max_speakers", None)))][1].setChecked(
-                True)
-            self.translation_method.buttons[self.translation_method.buttons.index(
-                next(b for o, b in self.translation_method.buttons if o == config.get("translation_method", "LLM")))][
-                1].setChecked(True)
-            self.target_language_translation.buttons[self.target_language_translation.buttons.index(next(
-                b for o, b in self.target_language_translation.buttons if
-                o == config.get("target_language_translation", "简体中文")))][1].setChecked(True)
-            self.tts_method.buttons[self.tts_method.buttons.index(
-                next(b for o, b in self.tts_method.buttons if o == config.get("tts_method", "EdgeTTS")))][1].setChecked(
-                True)
-            self.target_language_tts.buttons[self.target_language_tts.buttons.index(next(
-                b for o, b in self.target_language_tts.buttons if o == config.get("target_language_tts", "中文")))][
-                1].setChecked(True)
-            self.edge_tts_voice.buttons[self.edge_tts_voice.buttons.index(next(
-                b for o, b in self.edge_tts_voice.buttons if
-                o == config.get("edge_tts_voice", "zh-CN-XiaoxiaoNeural")))][1].setChecked(True)
-            self.add_subtitles.buttons[self.add_subtitles.buttons.index(
-                next(b for o, b in self.add_subtitles.buttons if o == config.get("add_subtitles", True)))][
-                1].setChecked(True)
+
+            # 分离多个说话人
+            separate_speakers_value = config.get("separate_speakers", True)
+            self._set_radio_button(self.separate_speakers.buttons, separate_speakers_value, True)
+
+            # 最小说话人数
+            min_speakers_value = config.get("min_speakers", None)
+            self._set_radio_button(self.min_speakers.buttons, min_speakers_value, None)
+
+            # 最大说话人数
+            max_speakers_value = config.get("max_speakers", None)
+            self._set_radio_button(self.max_speakers.buttons, max_speakers_value, None)
+
+            # 翻译方式
+            translation_method_value = config.get("translation_method", "LLM")
+            self._set_radio_button(self.translation_method.buttons, translation_method_value, "LLM")
+
+            # 目标语言 (翻译)
+            target_lang_trans_value = config.get("target_language_translation", "简体中文")
+            self._set_radio_button(self.target_language_translation.buttons, target_lang_trans_value, "简体中文")
+
+            # TTS方法
+            tts_method_value = config.get("tts_method", "EdgeTTS")
+            self._set_radio_button(self.tts_method.buttons, tts_method_value, "EdgeTTS")
+
+            # 目标语言 (TTS)
+            target_lang_tts_value = config.get("target_language_tts", "中文")
+            self._set_radio_button(self.target_language_tts.buttons, target_lang_tts_value, "中文")
+
+            # EdgeTTS声音选择
+            edge_tts_voice_value = config.get("edge_tts_voice", "zh-CN-XiaoxiaoNeural")
+            self._set_radio_button(self.edge_tts_voice.buttons, edge_tts_voice_value, "zh-CN-XiaoxiaoNeural")
+
+            # 添加字幕
+            add_subtitles_value = config.get("add_subtitles", True)
+            self._set_radio_button(self.add_subtitles.buttons, add_subtitles_value, True)
+
+            # 加速倍数
             self.speed_factor.setValue(config.get("speed_factor", 1.00))
+
+            # 帧率
             self.frame_rate.setValue(config.get("frame_rate", 30))
+
+            # 背景音乐
             if config.get("background_music"):
                 self.background_music.file_path.setText(config.get("background_music"))
+
+            # 背景音乐音量
             self.bg_music_volume.setValue(config.get("bg_music_volume", 0.5))
+
+            # 视频音量
             self.video_volume.setValue(config.get("video_volume", 1.0))
-            self.output_resolution.buttons[self.output_resolution.buttons.index(
-                next(b for o, b in self.output_resolution.buttons if o == config.get("output_resolution", "1080p")))][
-                1].setChecked(True)
+
+            # 输出分辨率
+            output_resolution_value = config.get("output_resolution", "1080p")
+            self._set_radio_button(self.output_resolution.buttons, output_resolution_value, "1080p")
+
+            # 最大工作线程数
             self.max_workers.setValue(config.get("max_workers", 1))
+
+            # 最大重试次数
             self.max_retries.setValue(config.get("max_retries", 3))
+
         except Exception as e:
             QMessageBox.warning(self, "配置加载错误", f"加载配置时出错: {str(e)}")
+
+    def _set_radio_button(self, buttons, value, default_value):
+        """辅助方法：安全地设置单选按钮值"""
+        try:
+            # 尝试找到匹配的选项并选中对应的按钮
+            for option, button in buttons:
+                if option == value:
+                    button.setChecked(True)
+                    return
+
+            # 如果没找到，使用默认值
+            for option, button in buttons:
+                if option == default_value:
+                    button.setChecked(True)
+                    return
+        except Exception:
+            # 如果出现任何错误，尝试使用默认值
+            for option, button in buttons:
+                if option == default_value:
+                    button.setChecked(True)
+                    return
 
     def save_config(self):
         """保存配置到JSON文件"""
