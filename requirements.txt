@@ -40,4 +40,7 @@ gdown==5.1.0
 pyarrow
 conformer==0.3.2
 lightning==2.2.4
+requests
+dotenv
+loguru
 # ctranslate2==3.24.0
