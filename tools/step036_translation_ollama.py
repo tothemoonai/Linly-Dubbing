@@ -19,8 +19,7 @@ def ollama_response(messages, model_name=None):
     返回:
         翻译结果文本
     """
-    if model_name is None:
-        model_name = os.getenv('OLLAMA_MODEL', 'qwen2.5:14b')
+    model_name = os.getenv('OLLAMA_MODEL', 'qwen2.5:14b')
 
     # 获取Ollama API的URL
     base_url = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434/api')
